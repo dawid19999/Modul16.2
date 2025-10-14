@@ -1,0 +1,58 @@
+from flask import render_template, request, redirect, url_for, flash
+from blog import app, db
+from blog.models import Entry
+from blog.forms import EntryForm
+
+# Funkcja obsługująca tworzenie i edycję wpisów
+def handle_entry(entry_id=None):
+    if entry_id:
+        entry = Entry.query.get_or_404(entry_id)
+        form = EntryForm(obj=entry)
+        action = "Edytuj wpis"
+    else:
+        entry = None
+        form = EntryForm()
+        action = "Dodaj nowy wpis"
+
+    errors = None
+
+    if form.validate_on_submit():
+        if entry:
+            form.populate_obj(entry)
+            flash("Wpis został zaktualizowany!", "success")
+        else:
+            entry = Entry(
+                title=form.title.data,
+                body=form.body.data,
+                is_published=form.is_published.data
+            )
+            db.session.add(entry)
+            flash("Nowy wpis został dodany!", "success")
+        db.session.commit()
+        return redirect(url_for("index"))
+    elif request.method == "POST":
+        errors = form.errors
+
+    all_posts = Entry.query.filter_by(is_published=True).order_by(Entry.pub_date.desc()).all()
+
+    return render_template("entry_form.html", form=form, action=action, errors=errors, all_posts=all_posts)
+
+
+# Routingi
+@app.route("/", methods=["GET", "POST"])
+def index():
+    return handle_entry()
+
+@app.route("/edit-post/<int:entry_id>", methods=["GET", "POST"])
+def edit_entry(entry_id):
+    return handle_entry(entry_id)
+
+
+# Nowa funkcja do usuwania wpisów
+@app.route("/delete-post/<int:entry_id>", methods=["POST"])
+def delete_entry(entry_id):
+    entry = Entry.query.get_or_404(entry_id)
+    db.session.delete(entry)
+    db.session.commit()
+    flash("Wpis został usunięty!", "success")
+    return redirect(url_for("index"))
